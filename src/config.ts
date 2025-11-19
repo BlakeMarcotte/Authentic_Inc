@@ -58,6 +58,9 @@ export const selectors = {
     // "Save Font" button at the top
     saveFontButton: 'button:has-text("Save Font")',
 
+    // "Ok" button on success dialog after saving
+    okButton: 'button:has-text("Ok")',
+
     // "Settings" button
     settingsButton: 'button:has-text("Settings")',
 

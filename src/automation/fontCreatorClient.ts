@@ -77,13 +77,15 @@ export class FontCreatorClient {
   }
 
   /**
-   * Draws a single glyph in the specified box
+   * Draws a single glyph in the specified box and saves it
    * NEW WORKFLOW:
    * 1. Click on the small canvas to open drawing mode
    * 2. Wait for large drawing canvas to appear
    * 3. Draw strokes on the large canvas
    * 4. Click "Done" to confirm
-   * 5. Optionally click "Next" to move to next character
+   * 5. Click "Save Font"
+   * 6. Click "Ok" on success dialog
+   * 7. Click "Back" to return to grid
    */
   async drawGlyphAtIndex(glyph: Glyph, boxIndex: number): Promise<void> {
     if (!this.page || !this.drawingEngine) {
@@ -134,18 +136,37 @@ export class FontCreatorClient {
     await this.page.waitForTimeout(500);
 
     logger.success(`Glyph '${glyph.char}' drawn and confirmed`);
+
+    // STEP 6: Click "Save Font"
+    logger.info('Clicking "Save Font" button');
+    await this.page.click(selectors.fontCreator.saveFontButton);
+    await this.page.waitForTimeout(2000);
+
+    // STEP 7: Click "Ok" on success dialog
+    logger.info('Waiting for success dialog...');
+    await waitForElement(this.page, selectors.fontCreator.okButton, 5000);
+    logger.info('Clicking "Ok" button');
+    await this.page.click(selectors.fontCreator.okButton);
+    await this.page.waitForTimeout(1000);
+
+    // STEP 8: Click "Back" to return to grid
+    logger.info('Clicking "Back" to return to grid');
+    await this.page.click(selectors.fontCreator.backButton);
+    await this.page.waitForTimeout(1000);
+
+    logger.success(`Glyph '${glyph.char}' saved successfully!\n`);
   }
 
   /**
    * Draws all glyphs from the font data
-   * This is a simple sequential implementation
+   * Each glyph is saved individually before moving to the next
    */
   async drawAllGlyphs(fontData: FontData): Promise<void> {
     if (!this.page) {
       throw new Error('Browser not initialized');
     }
 
-    logger.info(`\n[STEP 2/3] Drawing ${fontData.glyphs.length} glyphs\n`);
+    logger.info(`\n[STEP 3/3] Drawing and saving ${fontData.glyphs.length} glyphs\n`);
 
     // Wait for the glyph boxes to be ready on main grid
     await waitForElement(
@@ -221,13 +242,21 @@ export class FontCreatorClient {
       await this.page.click(selectors.fontCreator.saveFontButton);
 
       // Wait for save operation to complete
-      // This might need adjustment based on actual app behavior
-      await this.page.waitForTimeout(3000);
+      await this.page.waitForTimeout(2000);
 
       logger.success('Save Font button clicked!');
-      logger.info('Check the UUNA app to verify the font was saved');
+
+      // Wait for and click the "Ok" button on the success dialog
+      logger.info('Waiting for success dialog...');
+      await waitForElement(this.page, selectors.fontCreator.okButton, 5000);
+
+      logger.info('Clicking "Ok" button');
+      await this.page.click(selectors.fontCreator.okButton);
+
+      await this.page.waitForTimeout(1000);
+      logger.success('Font saved successfully!');
     } catch (error) {
-      logger.error('Failed to click Save Font button');
+      logger.error('Failed to save font');
       logger.info('Current selector: ' + selectors.fontCreator.saveFontButton);
       logger.info('Inspect the "Save Font" button and update the selector in config.ts');
       throw error;
@@ -236,7 +265,8 @@ export class FontCreatorClient {
 
   /**
    * Main automation flow: draws a complete font from data
-   * Gives user 10 seconds to log in after browser launches
+   * Gives user 20 seconds to log in after browser launches
+   * Each glyph is saved individually
    */
   async createFont(fontData: FontData): Promise<void> {
     try {
@@ -248,10 +278,10 @@ export class FontCreatorClient {
       await this.launch();
       await this.navigate();
       await this.drawAllGlyphs(fontData);
-      await this.saveFont(fontData.fontName);
 
       logger.info(`\n${'='.repeat(60)}`);
       logger.success(`Font creation complete!`);
+      logger.success(`All ${fontData.glyphs.length} glyphs saved individually!`);
       logger.info(`${'='.repeat(60)}\n`);
 
       // Keep browser open for a moment to see the result
