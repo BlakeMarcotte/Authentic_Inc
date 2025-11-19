@@ -107,7 +107,7 @@ export async function waitForElement(
   logger.debug(`Waiting for element: ${selector}`);
 
   await page.waitForSelector(selector, {
-    state: 'visible',
+    state: 'attached',
     timeout,
   });
 

@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "draw": "ts-node src/index.ts",
+    "detect-selectors": "ts-node src/utils/detectSelectors.ts",
     "clean": "rimraf dist"
   },
   "keywords": [

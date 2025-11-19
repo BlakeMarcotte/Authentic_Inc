@@ -1,5 +1,5 @@
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { FontData, Glyph, UUNACredentials, AutomationConfig } from '../types';
+import { FontData, Glyph, AutomationConfig } from '../types';
 import { DrawingEngine } from './drawingEngine';
 import { getBoundingBox, findGlyphCanvases, getNthGlyphCanvas, waitForElement } from './selectors';
 import { selectors } from '../config';
@@ -20,7 +20,7 @@ export class FontCreatorClient {
    * Launches the browser and navigates to the Font Creator app
    */
   async launch(): Promise<void> {
-    logger.step(1, 5, 'Launching browser');
+    logger.step(1, 3, 'Launching browser');
 
     this.browser = await chromium.launch({
       headless: this.config.headless,
@@ -40,87 +40,100 @@ export class FontCreatorClient {
 
   /**
    * Navigates to the UUNA Font Creator URL
+   * Assumes you're already logged in or the page doesn't require login
    */
   async navigate(): Promise<void> {
     if (!this.page) {
       throw new Error('Browser not launched. Call launch() first.');
     }
 
-    logger.step(2, 5, 'Navigating to Font Creator');
+    logger.step(2, 3, 'Navigating to Font Creator');
     logger.info(`URL: ${this.config.baseUrl}`);
 
     await this.page.goto(this.config.baseUrl, {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
       timeout: this.config.timeout,
     });
 
     logger.success('Navigation complete');
-  }
 
-  /**
-   * Logs into the UUNA Font Creator
-   * NOTE: This is a placeholder implementation. You'll need to update
-   * the selectors and logic based on the actual login flow.
-   */
-  async login(credentials: UUNACredentials): Promise<void> {
-    if (!this.page) {
-      throw new Error('Browser not launched. Call launch() first.');
-    }
+    // Give user 20 seconds to manually log in
+    logger.info('Waiting 20 seconds for you to log in...');
+    await this.page.waitForTimeout(20000);
+    logger.success('Continuing with automation');
 
-    logger.step(3, 5, 'Logging in');
+    logger.info('Waiting for drawing boxes to load...');
 
+    // Wait for at least one glyph box to appear
     try {
-      // Wait for login form to appear
-      // NOTE: Update these selectors after inspecting the actual app
-      await waitForElement(this.page, selectors.login.usernameInput, this.config.timeout);
-
-      // Fill in credentials
-      await this.page.fill(selectors.login.usernameInput, credentials.username);
-      await this.page.fill(selectors.login.passwordInput, credentials.password);
-
-      // Click login button
-      await this.page.click(selectors.login.submitButton);
-
-      // Wait for navigation after login
-      await this.page.waitForLoadState('networkidle', { timeout: this.config.timeout });
-
-      logger.success('Login successful');
+      await waitForElement(this.page, selectors.fontCreator.glyphBox, this.config.timeout);
+      logger.success('Drawing boxes found and ready');
     } catch (error) {
-      logger.error('Login failed. Please check the selectors in config.ts');
+      logger.error('Could not find drawing boxes. Check the selector in config.ts');
+      logger.info('Current selector: ' + selectors.fontCreator.glyphBox);
+      logger.info('Right-click on a white drawing box in the browser, select "Inspect", and update the selector');
       throw error;
     }
   }
 
   /**
-   * Draws a single glyph in the specified canvas
+   * Draws a single glyph in the specified box
+   * NEW WORKFLOW:
+   * 1. Click on the small canvas to open drawing mode
+   * 2. Wait for large drawing canvas to appear
+   * 3. Draw strokes on the large canvas
+   * 4. Click "Done" to confirm
+   * 5. Optionally click "Next" to move to next character
    */
-  async drawGlyphAtIndex(glyph: Glyph, canvasIndex: number): Promise<void> {
+  async drawGlyphAtIndex(glyph: Glyph, boxIndex: number): Promise<void> {
     if (!this.page || !this.drawingEngine) {
       throw new Error('Browser not initialized');
     }
 
-    logger.info(`Drawing glyph '${glyph.char}' at canvas index ${canvasIndex}`);
+    logger.info(`[${boxIndex + 1}] Drawing glyph '${glyph.char}' at box index ${boxIndex}`);
 
-    // Get the canvas element at this index
-    const canvasLocator = await getNthGlyphCanvas(
+    // STEP 1: Click on the small canvas box to open drawing mode
+    const boxLocator = await getNthGlyphCanvas(
       this.page,
-      canvasIndex,
-      selectors.fontCreator.glyphCanvas
+      boxIndex,
+      selectors.fontCreator.glyphBox
     );
 
-    // Get the bounding box for coordinate conversion
-    const boundingBox = await getBoundingBox(canvasLocator);
+    logger.debug('Clicking canvas to open drawing mode...');
+    await boxLocator.click();
 
-    logger.debug(`Canvas bounding box: x=${boundingBox.x}, y=${boundingBox.y}, w=${boundingBox.width}, h=${boundingBox.height}`);
+    // STEP 2: Wait for the large drawing canvas to appear
+    await this.page.waitForTimeout(500); // Brief wait for animation
+    await waitForElement(this.page, selectors.fontCreator.drawingCanvas, 5000);
+
+    logger.debug('Drawing interface opened');
+
+    // STEP 3: Get the bounding box of the LARGE drawing canvas
+    const drawingCanvasLocator = this.page.locator(selectors.fontCreator.drawingCanvas).first();
+    const boundingBox = await getBoundingBox(drawingCanvasLocator);
+
+    logger.debug(`Drawing canvas bounding box: x=${boundingBox.x}, y=${boundingBox.y}, w=${boundingBox.width}, h=${boundingBox.height}`);
 
     // Optional: Highlight the bounding box for debugging
     if (!this.config.headless && this.config.verbose) {
-      await this.drawingEngine.highlightBoundingBox(boundingBox, 'blue');
-      await this.page.waitForTimeout(500); // Brief pause to see the highlight
+      await this.drawingEngine.highlightBoundingBox(boundingBox, 'lime');
+      await this.page.waitForTimeout(500);
     }
 
-    // Draw the glyph
+    // STEP 4: Draw the glyph on the large canvas
     await this.drawingEngine.drawGlyph(glyph.strokes, boundingBox, glyph.char);
+
+    // Small pause to see the drawing
+    await this.page.waitForTimeout(300);
+
+    // STEP 5: Click "Done" button to confirm
+    logger.debug('Clicking "Done" button...');
+    await this.page.click(selectors.fontCreator.doneButton);
+
+    // Wait for the drawing interface to close
+    await this.page.waitForTimeout(500);
+
+    logger.success(`Glyph '${glyph.char}' drawn and confirmed`);
   }
 
   /**
@@ -132,25 +145,25 @@ export class FontCreatorClient {
       throw new Error('Browser not initialized');
     }
 
-    logger.step(4, 5, `Drawing ${fontData.glyphs.length} glyphs`);
+    logger.info(`\n[STEP 2/3] Drawing ${fontData.glyphs.length} glyphs\n`);
 
-    // Wait for the glyph canvases to be ready
+    // Wait for the glyph boxes to be ready on main grid
     await waitForElement(
       this.page,
-      selectors.fontCreator.glyphCanvas,
+      selectors.fontCreator.glyphBox,
       this.config.timeout
     );
 
-    // Get all available canvases
+    // Get all available boxes
     const canvases = await findGlyphCanvases(
       this.page,
-      selectors.fontCreator.glyphCanvas
+      selectors.fontCreator.glyphBox
     );
 
-    logger.info(`Found ${canvases.length} available canvas slots`);
+    logger.info(`Found ${canvases.length} available drawing box slots on this page`);
 
     if (canvases.length === 0) {
-      throw new Error('No glyph canvases found. Check selectors in config.ts');
+      throw new Error('No glyph boxes found. Check the glyphBox selector in config.ts');
     }
 
     // Draw each glyph
@@ -161,68 +174,79 @@ export class FontCreatorClient {
       // In a more advanced version, you might map characters to specific positions
       if (i >= canvases.length) {
         logger.warn(
-          `More glyphs (${fontData.glyphs.length}) than canvases (${canvases.length}). Some glyphs will be skipped.`
+          `More glyphs (${fontData.glyphs.length}) than boxes (${canvases.length}). Some glyphs will be skipped.`
         );
         break;
       }
 
-      await this.drawGlyphAtIndex(glyph, i);
+      try {
+        await this.drawGlyphAtIndex(glyph, i);
 
-      // Small delay between glyphs
-      await this.page.waitForTimeout(200);
+        // Make sure we're back on the main grid before proceeding to next glyph
+        // Wait for the grid to be visible again
+        await this.page.waitForTimeout(300);
+        await waitForElement(this.page, selectors.fontCreator.glyphBox, 5000);
+
+      } catch (error) {
+        logger.error(`Failed to draw glyph '${glyph.char}' at index ${i}`);
+
+        // Try to recover by clicking Back button if we're stuck in drawing mode
+        const backButtonVisible = await this.page.locator(selectors.fontCreator.backButton).isVisible();
+        if (backButtonVisible) {
+          logger.warn('Attempting to return to main grid...');
+          await this.page.click(selectors.fontCreator.backButton);
+          await this.page.waitForTimeout(1000);
+        }
+
+        throw error;
+      }
     }
 
-    logger.success(`All glyphs drawn successfully`);
+    logger.success(`All ${Math.min(fontData.glyphs.length, canvases.length)} glyphs drawn successfully\n`);
   }
 
   /**
    * Saves the font with the given name
    */
-  async saveFont(fontName: string): Promise<void> {
+  async saveFont(fontName?: string): Promise<void> {
     if (!this.page) {
       throw new Error('Browser not initialized');
     }
 
-    logger.step(5, 5, `Saving font as '${fontName}'`);
+    logger.step(3, 3, 'Saving font');
 
     try {
-      // Check if there's a font name input field
-      const nameInputExists = await this.page.locator(selectors.fontCreator.fontNameInput).count();
-
-      if (nameInputExists > 0) {
-        logger.info('Entering font name');
-        await this.page.fill(selectors.fontCreator.fontNameInput, fontName);
-      } else {
-        logger.warn('Font name input not found. The font may use a default name.');
-      }
-
       // Click the save button
-      logger.info('Clicking Save Font button');
+      logger.info('Clicking "Save Font" button');
       await this.page.click(selectors.fontCreator.saveFontButton);
 
       // Wait for save operation to complete
       // This might need adjustment based on actual app behavior
       await this.page.waitForTimeout(3000);
 
-      logger.success(`Font '${fontName}' saved successfully!`);
+      logger.success('Save Font button clicked!');
+      logger.info('Check the UUNA app to verify the font was saved');
     } catch (error) {
-      logger.error('Failed to save font. Check the selectors in config.ts');
+      logger.error('Failed to click Save Font button');
+      logger.info('Current selector: ' + selectors.fontCreator.saveFontButton);
+      logger.info('Inspect the "Save Font" button and update the selector in config.ts');
       throw error;
     }
   }
 
   /**
    * Main automation flow: draws a complete font from data
+   * Gives user 10 seconds to log in after browser launches
    */
-  async createFont(fontData: FontData, credentials: UUNACredentials): Promise<void> {
+  async createFont(fontData: FontData): Promise<void> {
     try {
       logger.info(`\n${'='.repeat(60)}`);
       logger.info(`Starting font creation: ${fontData.fontName}`);
+      logger.info(`Total glyphs to draw: ${fontData.glyphs.length}`);
       logger.info(`${'='.repeat(60)}\n`);
 
       await this.launch();
       await this.navigate();
-      await this.login(credentials);
       await this.drawAllGlyphs(fontData);
       await this.saveFont(fontData.fontName);
 

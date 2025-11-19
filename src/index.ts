@@ -4,18 +4,17 @@ import { FontCreatorClient } from './automation/fontCreatorClient';
 import { readGlyphData } from './utils/fileReader';
 import { logger } from './utils/logger';
 import { config } from './config';
-import { UUNACredentials } from './types';
 
 /**
  * CLI entrypoint for UUNA Font Creator automation
  *
  * Usage:
- *   npm run draw <glyph-file.json> [username] [password]
- *   ts-node src/index.ts <glyph-file.json> [username] [password]
+ *   npm run draw <glyph-file.json>
+ *   ts-node src/index.ts <glyph-file.json>
  *
  * Examples:
  *   npm run draw test-data/sample-glyphs.json
- *   npm run draw customer-fonts/john-doe.json myuser mypass
+ *   npm run draw test-data/simple-test.json
  */
 
 async function main() {
@@ -28,57 +27,37 @@ UUNA Font Creator Automation
 =============================
 
 Usage:
-  npm run draw <glyph-file.json> [username] [password]
+  npm run draw <glyph-file.json>
 
 Arguments:
   glyph-file.json  Path to JSON file with font data (required)
-  username         UUNA account username (optional, will prompt if needed)
-  password         UUNA account password (optional, will prompt if needed)
 
 Examples:
   npm run draw test-data/sample-glyphs.json
-  npm run draw customer-fonts/john-doe.json myuser mypass
+  npm run draw test-data/simple-test.json
 
 Configuration:
   Edit src/config.ts to customize:
-  - UUNA Font Creator URL
-  - DOM selectors for login and drawing
+  - UUNA Font Creator URL (currently: ${config.baseUrl})
+  - DOM selectors for drawing boxes and buttons
   - Timeouts and delays
   - Headless mode (currently: ${config.headless ? 'ON' : 'OFF'})
 
-Note:
-  Before running, you MUST inspect the UUNA Font Creator web app
-  and update the selectors in src/config.ts to match the actual DOM.
+How it works:
+  1. Browser launches (you have 10 seconds to log in)
+  2. Script navigates to ${config.baseUrl}
+  3. Automation draws all glyphs from your JSON file
+  4. Clicks "Save Font" when done
+
+IMPORTANT - Before First Run:
+  1. Make sure the selectors in src/config.ts match your UUNA app
+  2. The browser will give you 10 seconds to log in after launch
+  3. The script will then navigate to the font creator page automatically
     `);
     process.exit(0);
   }
 
   const glyphFilePath = args[0];
-
-  // Get credentials (for now, from command line or hardcoded)
-  // In production, you might want to use environment variables or a secure config
-  const credentials: UUNACredentials = {
-    username: args[1] || process.env.UUNA_USERNAME || '',
-    password: args[2] || process.env.UUNA_PASSWORD || '',
-  };
-
-  // Validate credentials are provided
-  if (!credentials.username || !credentials.password) {
-    logger.error('Credentials not provided!');
-    console.log(`
-Please provide credentials in one of these ways:
-1. Command line arguments:
-   npm run draw ${glyphFilePath} <username> <password>
-
-2. Environment variables:
-   set UUNA_USERNAME=your-username
-   set UUNA_PASSWORD=your-password
-   npm run draw ${glyphFilePath}
-
-3. Hardcode them in src/index.ts (not recommended for production)
-    `);
-    process.exit(1);
-  }
 
   try {
     // Read and validate glyph data
@@ -88,12 +67,12 @@ Please provide credentials in one of these ways:
     const client = new FontCreatorClient(config);
 
     // Run the automation
-    await client.createFont(fontData, credentials);
+    await client.createFont(fontData);
 
-    logger.success('\n✓ Font creation completed successfully!\n');
+    logger.success('\n✓ Font automation completed successfully!\n');
     process.exit(0);
   } catch (error) {
-    logger.error('\n✗ Font creation failed\n');
+    logger.error('\n✗ Font automation failed\n');
 
     if (error instanceof Error) {
       logger.error(`Error: ${error.message}`);
@@ -103,6 +82,11 @@ Please provide credentials in one of these ways:
         console.error(error.stack);
       }
     }
+
+    logger.info('\nTroubleshooting:');
+    logger.info('1. Check that selectors in src/config.ts match the actual DOM');
+    logger.info('2. Inspect elements in the browser (F12) to find correct selectors');
+    logger.info('3. Make sure the drawing boxes are visible when you run this');
 
     process.exit(1);
   }
