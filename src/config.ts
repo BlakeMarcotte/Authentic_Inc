@@ -43,16 +43,7 @@ export const selectors = {
     // "Done" button - confirms the drawing and closes the drawing interface
     doneButton: 'button:has-text("Done")',
 
-    // "Next" button - moves to the next character after Done
-    nextCharButton: 'button:has-text("Next")',
-
-    // "Clear" button - clears the current drawing
-    clearButton: 'button:has-text("Clear")',
-
-    // "Undo" button - undoes last stroke
-    undoButton: 'button:has-text("Undo")',
-
-    // "Back" button - returns to main grid (class: fontcreater_btn)
+    // "Back" button - returns to main grid
     backButton: 'button.fontcreater_btn:has-text("Back")',
 
     // "Save Font" button at the top
@@ -60,44 +51,5 @@ export const selectors = {
 
     // "Ok" button on success dialog after saving
     okButton: 'button:has-text("Ok")',
-
-    // "Settings" button
-    settingsButton: 'button:has-text("Settings")',
-
-    // Next/Previous page buttons (for multi-page support later)
-    nextPageButton: 'button:has-text("Next Page")',
-    previousPageButton: 'button:has-text("Previous Page")',
-
-    // Page indicator (shows "1 / 4")
-    pageIndicator: 'text=/\\d+\\s*\\/\\s*\\d+/',
   },
 };
-
-/**
- * Character map - based on the visible layout in the screenshot
- * Page 1 visible characters: !, ", #, $, %, &, (, ), *, +, ,, -, ., /, 0-9, :, ;
- * This matches the order they appear in the UUNA grid (left-to-right, top-to-bottom)
- */
-export const CHARACTER_MAP = {
-  // Page 1 - Punctuation and digits (from screenshot)
-  page1: [
-    '!', '"', '#', '$', '%', '&', '(', ')', // Row 1 (some visible)
-    '*', '+', ',', '-', '.', '/', '0', '1', '2', // Row 2
-    '3', '4', '5', '6', '7', '8', '9', ':', ';', // Row 3
-  ],
-
-  // Note: Pages 2-4 likely contain:
-  // - Uppercase letters A-Z
-  // - Lowercase letters a-z
-  // - Additional special characters
-  // We'll add these as needed after testing page 1
-};
-
-/**
- * Get the expected index of a character in the UUNA grid for page 1
- * Returns -1 if character not found on page 1
- */
-export function getCharacterIndex(char: string): number {
-  const index = CHARACTER_MAP.page1.indexOf(char);
-  return index;
-}

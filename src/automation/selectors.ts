@@ -46,34 +46,6 @@ export async function findGlyphCanvases(
 }
 
 /**
- * Finds a specific glyph canvas by character
- * This assumes the canvas or its parent has a data-char attribute
- */
-export async function findGlyphCanvasByChar(
-  page: Page,
-  char: string,
-  selector: string
-): Promise<Locator | null> {
-  logger.debug(`Looking for canvas for character '${char}'`);
-
-  // Try to find by data-char attribute
-  const locator = page.locator(`${selector}[data-char="${char}"]`);
-
-  const count = await locator.count();
-
-  if (count === 0) {
-    logger.warn(`No canvas found for character '${char}'`);
-    return null;
-  }
-
-  if (count > 1) {
-    logger.warn(`Multiple canvases found for character '${char}', using first one`);
-  }
-
-  return locator.first();
-}
-
-/**
  * Gets the nth glyph canvas (0-indexed)
  * Useful when canvases are in a predictable order but don't have data attributes
  */

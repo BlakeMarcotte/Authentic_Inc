@@ -227,43 +227,6 @@ export class FontCreatorClient {
   }
 
   /**
-   * Saves the font with the given name
-   */
-  async saveFont(fontName?: string): Promise<void> {
-    if (!this.page) {
-      throw new Error('Browser not initialized');
-    }
-
-    logger.step(3, 3, 'Saving font');
-
-    try {
-      // Click the save button
-      logger.info('Clicking "Save Font" button');
-      await this.page.click(selectors.fontCreator.saveFontButton);
-
-      // Wait for save operation to complete
-      await this.page.waitForTimeout(2000);
-
-      logger.success('Save Font button clicked!');
-
-      // Wait for and click the "Ok" button on the success dialog
-      logger.info('Waiting for success dialog...');
-      await waitForElement(this.page, selectors.fontCreator.okButton, 5000);
-
-      logger.info('Clicking "Ok" button');
-      await this.page.click(selectors.fontCreator.okButton);
-
-      await this.page.waitForTimeout(1000);
-      logger.success('Font saved successfully!');
-    } catch (error) {
-      logger.error('Failed to save font');
-      logger.info('Current selector: ' + selectors.fontCreator.saveFontButton);
-      logger.info('Inspect the "Save Font" button and update the selector in config.ts');
-      throw error;
-    }
-  }
-
-  /**
    * Main automation flow: draws a complete font from data
    * Gives user 20 seconds to log in after browser launches
    * Each glyph is saved individually
