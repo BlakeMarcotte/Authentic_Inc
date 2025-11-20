@@ -8,12 +8,6 @@ import { collection, getDocs } from 'firebase/firestore';
 
 const ADMIN_EMAIL = 'admin@authenticink.com';
 
-interface User {
-  uid: string;
-  email: string;
-  createdAt: string;
-}
-
 interface HandwritingData {
   email: string;
   glyphCount: number;
@@ -25,7 +19,6 @@ interface HandwritingData {
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState<User[]>([]);
   const [handwritingData, setHandwritingData] = useState<Record<string, HandwritingData>>({});
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -39,7 +32,6 @@ export default function AdminDashboard() {
         router.push('/admin');
       } else {
         setUser(user);
-        await loadUsers();
         await loadHandwritingData();
         setLoading(false);
       }
@@ -47,23 +39,6 @@ export default function AdminDashboard() {
 
     return () => unsubscribe();
   }, [router]);
-
-  const loadUsers = async () => {
-    try {
-      const response = await fetch('/api/list-users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminEmail: ADMIN_EMAIL }),
-      });
-
-      const data = await response.json();
-      if (data.users) {
-        setUsers(data.users);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
 
   const loadHandwritingData = async () => {
     try {
@@ -94,28 +69,27 @@ export default function AdminDashboard() {
     setMessage('');
 
     try {
-      const response = await fetch('/api/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: newEmail,
-          password: newPassword,
-          adminEmail: ADMIN_EMAIL,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage(`✓ User created: ${newEmail}`);
-        setNewEmail('');
-        setNewPassword('');
-        await loadUsers();
-      } else {
-        setMessage(`✗ Error: ${data.error}`);
+      const { createUserWithEmailAndPassword } = await import('firebase/auth');
+      const currentUser = auth.currentUser;
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
+      
+      if (currentUser) {
+        await auth.updateCurrentUser(currentUser);
       }
-    } catch (error) {
-      setMessage('✗ Failed to create user');
+
+      setMessage(`✓ User created: ${newEmail}`);
+      setNewEmail('');
+      setNewPassword('');
+      await loadHandwritingData();
+    } catch (error: any) {
+      if (error.code === 'auth/email-already-in-use') {
+        setMessage('✗ Error: Email already in use');
+      } else if (error.code === 'auth/weak-password') {
+        setMessage('✗ Error: Password should be at least 6 characters');
+      } else {
+        setMessage(`✗ Error: ${error.message}`);
+      }
     } finally {
       setCreating(false);
     }
@@ -168,7 +142,7 @@ export default function AdminDashboard() {
 
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
-              <div className="text-2xl font-semibold text-indigo-600">{users.length}</div>
+              <div className="text-2xl font-semibold text-indigo-600">{Object.keys(handwritingData).length}</div>
               <div className="text-sm text-gray-600 font-light">Total Clients</div>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
@@ -252,34 +226,31 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Client Accounts</h2>
             
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {users.length === 0 ? (
+              {Object.keys(handwritingData).length === 0 ? (
                 <p className="text-gray-400 text-center py-8 font-light">No clients yet</p>
               ) : (
-                users.map((clientUser) => {
-                  const data = handwritingData[clientUser.uid];
+                Object.entries(handwritingData).map(([userId, data]) => {
                   return (
                     <div
-                      key={clientUser.uid}
+                      key={userId}
                       className="p-4 border border-gray-200 rounded-xl hover:border-indigo-300 transition-all"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{clientUser.email}</div>
+                          <div className="font-medium text-gray-900">{data.email}</div>
                           <div className="text-xs text-gray-400 mt-1 font-light">
-                            Created: {new Date(clientUser.createdAt).toLocaleDateString()}
+                            User ID: {userId.substring(0, 8)}...
                           </div>
-                          {data && (
-                            <div className="mt-2 flex gap-2 text-xs">
-                              <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg">
-                                {data.glyphCount} chars
+                          <div className="mt-2 flex gap-2 text-xs">
+                            <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg">
+                              {data.glyphCount} chars
+                            </span>
+                            {data.completedAt && (
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg">
+                                ✓ Complete
                               </span>
-                              {data.completedAt && (
-                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg">
-                                  ✓ Complete
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
