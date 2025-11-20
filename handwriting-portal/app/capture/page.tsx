@@ -7,7 +7,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import DrawingCanvas from '@/components/DrawingCanvas';
 import TextCapture from '@/components/TextCapture';
-import { CHARACTERS, Glyph, HandwritingSession, Stroke } from '@/lib/types';
+import { CHARACTERS, Glyph, Stroke, NormalizedPoint } from '@/lib/types';
 
 type CaptureStage = 'drawing' | 'story' | 'thankyou' | 'complete';
 
@@ -41,9 +41,15 @@ export default function CapturePage() {
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const data = docSnap.data() as HandwritingSession;
-        setGlyphs(data.glyphs || []);
-        setCurrentCharIndex(data.glyphs?.length || 0);
+        const data = docSnap.data();
+        const loadedGlyphs = (data.glyphs || []).map((g: any) => ({
+          char: g.char,
+          strokes: g.strokes.map((stroke: any[]) => stroke.map((point: any) => [point.x, point.y] as NormalizedPoint)),
+          timestamp: g.timestamp,
+        }));
+        
+        setGlyphs(loadedGlyphs);
+        setCurrentCharIndex(loadedGlyphs.length || 0);
         setStory(data.story || '');
         setThankYouLetter(data.thankYouLetter || '');
 
@@ -53,7 +59,7 @@ export default function CapturePage() {
           setStage('complete');
         } else if (data.story) {
           setStage('thankyou');
-        } else if (data.glyphs?.length >= CHARACTERS.length) {
+        } else if (loadedGlyphs.length >= CHARACTERS.length) {
           setStage('story');
         }
       }
@@ -65,18 +71,22 @@ export default function CapturePage() {
   const saveProgress = async (updatedGlyphs?: Glyph[], updatedStory?: string, updatedThankYou?: string) => {
     if (!user) return;
 
-    const sessionData: HandwritingSession = {
+    const glyphsData = (updatedGlyphs || glyphs).map(g => ({
+      char: g.char,
+      strokes: g.strokes.map(stroke => stroke.map(point => ({ x: point[0], y: point[1] }))),
+      timestamp: g.timestamp,
+    }));
+
+    const sessionData = {
       userId: user.uid,
       email: user.email || '',
-      glyphs: updatedGlyphs || glyphs,
+      glyphs: glyphsData,
+      glyphCount: glyphsData.length,
       story: updatedStory !== undefined ? updatedStory : story,
       thankYouLetter: updatedThankYou !== undefined ? updatedThankYou : thankYouLetter,
       createdAt: Date.now(),
+      completedAt: (stage === 'complete' || (updatedThankYou && updatedStory)) ? Date.now() : null,
     };
-
-    if (stage === 'complete' || (updatedThankYou && updatedStory)) {
-      sessionData.completedAt = Date.now();
-    }
 
     try {
       await setDoc(doc(db, 'handwriting-sessions', user.uid), sessionData);
@@ -129,23 +139,6 @@ export default function CapturePage() {
     router.push('/');
   };
 
-  const downloadJSON = () => {
-    const data = {
-      fontName: `${user?.email?.split('@')[0]}_${new Date().toISOString().split('T')[0]}`,
-      glyphs: glyphs.map(g => ({
-        char: g.char,
-        strokes: g.strokes
-      }))
-    };
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${data.fontName}.json`;
-    a.click();
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -174,15 +167,14 @@ export default function CapturePage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <button
-              onClick={downloadJSON}
-              className="px-8 py-3 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition-all shadow-sm"
-            >
-              Download JSON
-            </button>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800">
+              <p className="font-medium mb-1">✓ All data saved to cloud</p>
+              <p className="text-indigo-600 font-light">Your handwriting data is securely stored and accessible by your administrator.</p>
+            </div>
+            
             <button
               onClick={handleLogout}
-              className="px-8 py-3 bg-black-400 text-white rounded-xl font-medium hover:bg-black-500 transition-all shadow-sm"
+              className="px-8 py-3 bg-gray-500 text-white rounded-xl font-medium hover:bg-gray-600 transition-all shadow-sm"
             >
               Logout
             </button>

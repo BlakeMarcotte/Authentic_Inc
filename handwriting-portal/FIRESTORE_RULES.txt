@@ -1,13 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write their own handwriting session
-    match /handwriting-sessions/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Users collection - created when accounts are set up
+    match /users/{userId} {
+      // Users can create their own user document during signup
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
+      // Users can read their own document
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Admin can read and write all user documents
+      allow read, write: if request.auth != null && request.auth.token.email == 'admin@authenticink.com';
     }
     
-    // Allow admin to read all handwriting sessions
+    // Invitations - for signup links
+    match /invitations/{inviteId} {
+      // Anyone can read invitations (needed for signup page)
+      allow read: if true;
+      
+      // Anyone can update to mark as used (during signup)
+      allow update: if true;
+      
+      // Only admin can create invitations
+      allow create: if request.auth != null && request.auth.token.email == 'admin@authenticink.com';
+    }
+    
+    // Handwriting sessions - user's captured data
     match /handwriting-sessions/{userId} {
+      // Users can read and write their own session
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Admin can read all sessions
       allow read: if request.auth != null && request.auth.token.email == 'admin@authenticink.com';
     }
   }

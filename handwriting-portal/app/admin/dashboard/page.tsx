@@ -8,6 +8,12 @@ import { collection, getDocs } from 'firebase/firestore';
 
 const ADMIN_EMAIL = 'admin@authenticink.com';
 
+interface UserInfo {
+  email: string;
+  createdAt: number;
+  status: string;
+}
+
 interface HandwritingData {
   email: string;
   glyphCount: number;
@@ -19,9 +25,9 @@ interface HandwritingData {
 export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<Record<string, UserInfo>>({});
   const [handwritingData, setHandwritingData] = useState<Record<string, HandwritingData>>({});
   const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
@@ -32,6 +38,7 @@ export default function AdminDashboard() {
         router.push('/admin');
       } else {
         setUser(user);
+        await loadUsers();
         await loadHandwritingData();
         setLoading(false);
       }
@@ -39,6 +46,27 @@ export default function AdminDashboard() {
 
     return () => unsubscribe();
   }, [router]);
+
+  const loadUsers = async () => {
+    try {
+      const usersRef = collection(db, 'users');
+      const snapshot = await getDocs(usersRef);
+      
+      const usersData: Record<string, UserInfo> = {};
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        usersData[doc.id] = {
+          email: data.email,
+          createdAt: data.createdAt,
+          status: data.status || 'pending',
+        };
+      });
+      
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
 
   const loadHandwritingData = async () => {
     try {
@@ -63,51 +91,81 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     setMessage('');
 
     try {
-      const { createUserWithEmailAndPassword } = await import('firebase/auth');
-      const currentUser = auth.currentUser;
+      const { setDoc, doc } = await import('firebase/firestore');
       
-      const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
+      const token = Array.from({ length: 32 }, () => 
+        Math.random().toString(36)[2] || '0'
+      ).join('');
       
-      if (currentUser) {
-        await auth.updateCurrentUser(currentUser);
-      }
+      const inviteId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      await setDoc(doc(db, 'invitations', inviteId), {
+        id: inviteId,
+        email: newEmail,
+        token,
+        createdAt: Date.now(),
+        createdBy: ADMIN_EMAIL,
+        expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000),
+        used: false,
+      });
 
-      setMessage(`✓ User created: ${newEmail}`);
+      const inviteLink = `${window.location.origin}/signup?token=${token}`;
+      
+      await navigator.clipboard.writeText(inviteLink);
+      
+      setMessage(`✓ Invitation created for ${newEmail}\n\n📋 Link copied to clipboard!\n\nShare this link:\n${inviteLink}`);
       setNewEmail('');
-      setNewPassword('');
-      await loadHandwritingData();
     } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
-        setMessage('✗ Error: Email already in use');
-      } else if (error.code === 'auth/weak-password') {
-        setMessage('✗ Error: Password should be at least 6 characters');
-      } else {
-        setMessage(`✗ Error: ${error.message}`);
-      }
+      setMessage(`✗ Error: ${error.message}`);
     } finally {
       setCreating(false);
     }
   };
 
-  const generatePassword = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
-    let password = '';
-    for (let i = 0; i < 16; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setNewPassword(password);
-  };
 
-  const copyLoginLink = (email: string, password: string) => {
-    const link = `${window.location.origin}?email=${encodeURIComponent(email)}`;
-    navigator.clipboard.writeText(`Login Link: ${link}\nEmail: ${email}\nPassword: ${password}`);
-    setMessage(`✓ Copied credentials for ${email}`);
+  const downloadUserData = async (userId: string, email: string) => {
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const docRef = doc(db, 'handwriting-sessions', userId);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        setMessage('✗ No data found for this user');
+        return;
+      }
+
+      const data = docSnap.data();
+      const glyphs = (data.glyphs || []).map((g: any) => ({
+        char: g.char,
+        strokes: g.strokes.map((stroke: any[]) => 
+          stroke.map((point: any) => [point.x, point.y])
+        ),
+      }));
+
+      const jsonData = {
+        fontName: `${email.split('@')[0]}_${new Date().toISOString().split('T')[0]}`,
+        glyphs,
+      };
+
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${jsonData.fontName}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setMessage(`✓ Downloaded data for ${email}`);
+    } catch (error) {
+      setMessage('✗ Failed to download user data');
+      console.error(error);
+    }
   };
 
   const handleLogout = async () => {
@@ -142,7 +200,7 @@ export default function AdminDashboard() {
 
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
-              <div className="text-2xl font-semibold text-indigo-600">{Object.keys(handwritingData).length}</div>
+              <div className="text-2xl font-semibold text-indigo-600">{Object.keys(users).length}</div>
               <div className="text-sm text-gray-600 font-light">Total Clients</div>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
@@ -162,12 +220,13 @@ export default function AdminDashboard() {
 
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white rounded-3xl shadow-lg p-6 border border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Create New Client</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Create Invitation Link</h2>
+            <p className="text-sm text-gray-500 mb-4 font-light">Generate a unique signup link for a client. Link expires in 30 days.</p>
             
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <form onSubmit={handleCreateInvite} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email
+                  Client Email
                 </label>
                 <input
                   type="email"
@@ -179,31 +238,8 @@ export default function AdminDashboard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Auto-generate or enter"
-                    required
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={generatePassword}
-                    className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-all"
-                  >
-                    Generate
-                  </button>
-                </div>
-              </div>
-
               {message && (
-                <div className={`p-3 rounded-xl text-sm ${
+                <div className={`p-3 rounded-xl text-sm whitespace-pre-wrap ${
                   message.startsWith('✓') 
                     ? 'bg-green-50 border border-green-200 text-green-700' 
                     : 'bg-red-50 border border-red-200 text-red-600'
@@ -217,7 +253,7 @@ export default function AdminDashboard() {
                 disabled={creating}
                 className="w-full px-6 py-3 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all shadow-sm"
               >
-                {creating ? 'Creating...' : 'Create Client Account'}
+                {creating ? 'Creating...' : 'Generate Invitation Link'}
               </button>
             </form>
           </div>
@@ -226,10 +262,11 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Client Accounts</h2>
             
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {Object.keys(handwritingData).length === 0 ? (
+              {Object.keys(users).length === 0 ? (
                 <p className="text-gray-400 text-center py-8 font-light">No clients yet</p>
               ) : (
-                Object.entries(handwritingData).map(([userId, data]) => {
+                Object.entries(users).map(([userId, userInfo]) => {
+                  const sessionData = handwritingData[userId];
                   return (
                     <div
                       key={userId}
@@ -237,21 +274,41 @@ export default function AdminDashboard() {
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="font-medium text-gray-900">{data.email}</div>
+                          <div className="font-medium text-gray-900">{userInfo.email}</div>
                           <div className="text-xs text-gray-400 mt-1 font-light">
-                            User ID: {userId.substring(0, 8)}...
+                            Created: {new Date(userInfo.createdAt).toLocaleDateString()}
                           </div>
-                          <div className="mt-2 flex gap-2 text-xs">
-                            <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg">
-                              {data.glyphCount} chars
-                            </span>
-                            {data.completedAt && (
-                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg">
-                                ✓ Complete
+                          {sessionData ? (
+                            <div className="mt-2 flex gap-2 text-xs flex-wrap">
+                              <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg">
+                                {sessionData.glyphCount} chars
                               </span>
-                            )}
-                          </div>
+                              {sessionData.completedAt ? (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg">
+                                  ✓ Complete
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-lg">
+                                  In Progress
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-2">
+                              <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs">
+                                Not Started
+                              </span>
+                            </div>
+                          )}
                         </div>
+                        {sessionData && sessionData.completedAt && (
+                          <button
+                            onClick={() => downloadUserData(userId, userInfo.email)}
+                            className="ml-3 px-3 py-1.5 bg-indigo-500 text-white rounded-lg text-xs font-medium hover:bg-indigo-600 transition-all"
+                          >
+                            Download JSON
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
