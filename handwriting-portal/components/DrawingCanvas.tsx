@@ -27,10 +27,10 @@ export default function DrawingCanvas({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const updateCanvasSize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
+    const updateCanvasSize = () => {
       const container = canvas.parentElement;
       if (!container) return;
 
@@ -43,9 +43,20 @@ export default function DrawingCanvas({
       redrawAllStrokes();
     };
 
+    const preventScroll = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
     updateCanvasSize();
     window.addEventListener('resize', updateCanvasSize);
-    return () => window.removeEventListener('resize', updateCanvasSize);
+    canvas.addEventListener('touchstart', preventScroll, { passive: false });
+    canvas.addEventListener('touchmove', preventScroll, { passive: false });
+
+    return () => {
+      window.removeEventListener('resize', updateCanvasSize);
+      canvas.removeEventListener('touchstart', preventScroll);
+      canvas.removeEventListener('touchmove', preventScroll);
+    };
   }, []);
 
   const redrawAllStrokes = useCallback(() => {
@@ -103,7 +114,6 @@ export default function DrawingCanvas({
   };
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
     const point = getPointFromEvent(e);
     if (!point) return;
 
@@ -112,7 +122,6 @@ export default function DrawingCanvas({
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
     if (!isDrawing) return;
 
     const point = getPointFromEvent(e);

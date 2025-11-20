@@ -8,4 +8,5 @@ export interface Invitation {
   used: boolean;
   usedAt?: number;
   userId?: string;
+  testMode?: boolean;
 }

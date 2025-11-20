@@ -28,6 +28,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<Record<string, UserInfo>>({});
   const [handwritingData, setHandwritingData] = useState<Record<string, HandwritingData>>({});
   const [newEmail, setNewEmail] = useState('');
+  const [testMode, setTestMode] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
@@ -113,6 +114,7 @@ export default function AdminDashboard() {
         createdBy: ADMIN_EMAIL,
         expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000),
         used: false,
+        testMode: testMode,
       });
 
       const inviteLink = `${window.location.origin}/signup?token=${token}`;
@@ -143,8 +145,8 @@ export default function AdminDashboard() {
       const data = docSnap.data();
       const glyphs = (data.glyphs || []).map((g: any) => ({
         char: g.char,
-        strokes: g.strokes.map((stroke: any[]) => 
-          stroke.map((point: any) => [point.x, point.y])
+        strokes: g.strokes.map((stroke: any) => 
+          stroke.points ? stroke.points.map((point: any) => [point.x, point.y]) : []
         ),
       }));
 
@@ -236,6 +238,19 @@ export default function AdminDashboard() {
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-all text-gray-900 placeholder:text-gray-400"
                 />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="testMode"
+                  checked={testMode}
+                  onChange={(e) => setTestMode(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                />
+                <label htmlFor="testMode" className="text-sm text-gray-700">
+                  Test Mode (only 3 characters: !, A, 0)
+                </label>
               </div>
 
               {message && (

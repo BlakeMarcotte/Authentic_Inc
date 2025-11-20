@@ -87,6 +87,7 @@ export default function SignupPage() {
         createdAt: Date.now(),
         createdBy: inviteData.createdBy,
         status: 'active',
+        testMode: inviteData.testMode || false,
       });
 
       await updateDoc(doc(db, 'invitations', inviteData.docId), {
