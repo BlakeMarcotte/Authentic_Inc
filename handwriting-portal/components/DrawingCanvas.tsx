@@ -237,7 +237,7 @@ export default function DrawingCanvas({
             {hasPrevious && onPrevious && (
               <button
                 onClick={onPrevious}
-                className="px-8 py-3 bg-gray-400 text-white rounded-xl font-medium hover:bg-gray-500 transition-all shadow-sm"
+                className="px-8 py-3 bg-black-400 text-white rounded-xl font-medium hover:bg-black-500 transition-all shadow-sm"
               >
                 ← Previous
               </button>

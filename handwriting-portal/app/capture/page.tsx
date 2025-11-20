@@ -156,17 +156,17 @@ export default function CapturePage() {
 
   if (stage === 'complete') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 p-4">
-        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 p-4">
+        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-lg p-8 text-center border border-gray-200">
           <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Complete!</h1>
-          <p className="text-xl text-gray-600 mb-8">
+          <h1 className="text-4xl font-semibold text-gray-900 mb-4">Complete!</h1>
+          <p className="text-xl text-gray-500 mb-8 font-light">
             Thank you for capturing your handwriting. Your data has been saved successfully.
           </p>
 
-          <div className="bg-gray-50 rounded-lg p-6 mb-6 text-left">
-            <h2 className="font-semibold text-gray-700 mb-2">Session Summary:</h2>
-            <ul className="space-y-1 text-gray-600">
+          <div className="bg-gray-50 rounded-2xl p-6 mb-6 text-left border border-gray-200">
+            <h2 className="font-medium text-gray-800 mb-2">Session Summary:</h2>
+            <ul className="space-y-1 text-gray-600 font-light">
               <li>✓ {glyphs.length} characters captured</li>
               <li>✓ Story written ({story.length} characters)</li>
               <li>✓ Thank you letter written ({thankYouLetter.length} characters)</li>
@@ -176,13 +176,13 @@ export default function CapturePage() {
           <div className="flex flex-col gap-3">
             <button
               onClick={downloadJSON}
-              className="px-8 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+              className="px-8 py-3 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition-all shadow-sm"
             >
               Download JSON
             </button>
             <button
               onClick={handleLogout}
-              className="px-8 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+              className="px-8 py-3 bg-black-400 text-white rounded-xl font-medium hover:bg-black-500 transition-all shadow-sm"
             >
               Logout
             </button>
