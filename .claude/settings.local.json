@@ -6,7 +6,15 @@
       "Bash(npm run build:*)",
       "Bash(npx create-next-app:*)",
       "Bash(npm install:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(node:*)",
+      "Bash(pip3 install:*)",
+      "Bash(python3:*)",
+      "Bash(brew install:*)",
+      "Bash(cat:*)",
+      "Bash(md5:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

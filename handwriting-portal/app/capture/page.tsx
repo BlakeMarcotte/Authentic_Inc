@@ -6,6 +6,7 @@ import { auth, db } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import DrawingCanvas from '@/components/DrawingCanvas';
+import ImageUpload from '@/components/ImageUpload';
 import TextCapture from '@/components/TextCapture';
 import { CHARACTERS, TEST_CHARACTERS, Glyph, Stroke, NormalizedPoint } from '@/lib/types';
 
@@ -260,6 +261,22 @@ Thank you so much for..."
   }
 
   const characters = testMode ? TEST_CHARACTERS : CHARACTERS;
+
+  if (testMode) {
+    return (
+      <ImageUpload
+        character={characters[currentCharIndex]}
+        onComplete={handleGlyphComplete}
+        onNext={handleNext}
+        onPrevious={currentCharIndex > 0 ? handlePrevious : undefined}
+        hasPrevious={currentCharIndex > 0}
+        progress={{
+          current: currentCharIndex + 1,
+          total: characters.length,
+        }}
+      />
+    );
+  }
 
   return (
     <DrawingCanvas
