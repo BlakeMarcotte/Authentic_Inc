@@ -192,12 +192,20 @@ export default function AdminDashboard() {
               <h1 className="text-3xl font-semibold text-gray-900">Admin Dashboard</h1>
               <p className="text-gray-500 font-light mt-1">Manage client handwriting accounts</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-6 py-2.5 bg-gray-400 text-white rounded-xl font-medium hover:bg-gray-500 transition-all shadow-sm"
-            >
-              Logout
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push('/admin/manual-tracer')}
+                className="px-6 py-2.5 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition-all shadow-sm"
+              >
+                Manual Tracer
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-6 py-2.5 bg-gray-400 text-white rounded-xl font-medium hover:bg-gray-500 transition-all shadow-sm"
+              >
+                Logout
+              </button>
+            </div>
           </div>
 
           <div className="grid md:grid-cols-3 gap-4 mb-6">

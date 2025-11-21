@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Image processor combining smart cropping with skeletonization for clean centerline tracing
+Contour-based processor: trace original stroke paths, smooth with splines
 """
 
 import cv2
 import numpy as np
 import json
 from pathlib import Path
-from skimage.morphology import skeletonize
+from scipy.interpolate import splprep, splev
 
 
 def process_image(image_path):
-    """Process handwriting image: crop to character, then skeletonize for centerline"""
+    """Process handwriting using contour approximation"""
     
     img = cv2.imread(str(image_path))
     if img is None:
@@ -56,49 +56,51 @@ def process_image(image_path):
     
     _, square_binary = cv2.threshold(square, 180, 255, cv2.THRESH_BINARY_INV)
     
-    skeleton = skeletonize(square_binary > 0)
+    contours, _ = cv2.findContours(square_binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_TC89_L1)
     
-    y_coords, x_coords = np.where(skeleton)
+    print(f"  - Found {len(contours)} contour(s)")
     
-    if len(x_coords) == 0:
-        print(f"⚠️  No handwriting detected after skeletonization in {image_path.name}")
-        return []
+    all_points = []
     
-    points = list(zip(x_coords, y_coords))
-    sorted_points = sort_by_stroke_order(points)
+    for i, contour in enumerate(contours):
+        if len(contour) < 10:
+            continue
+        
+        epsilon = 0.01 * cv2.arcLength(contour, False)
+        approx = cv2.approxPolyDP(contour, epsilon, False)
+        
+        points = [(pt[0][0], pt[0][1]) for pt in approx]
+        
+        if len(points) >= 4:
+            smoothed = smooth_path_with_spline(points, smoothness=5, num_points=50)
+            all_points.extend(smoothed)
+            print(f"  - Contour {i+1}: {len(contour)} → {len(approx)} → {len(smoothed)} points")
+        else:
+            all_points.extend(points)
+            print(f"  - Contour {i+1}: {len(contour)} → {len(points)} points (too short to smooth)")
     
-    normalized = [[x / max_dim, y / max_dim] for x, y in sorted_points]
+    normalized = [[x / max_dim, y / max_dim] for x, y in all_points]
     
-    print(f"✓ Processed {image_path.name}: {len(normalized)} points extracted")
+    print(f"✓ Processed {image_path.name}: {len(normalized)} points")
     return normalized
 
 
-def sort_by_stroke_order(points):
-    """Sort points to follow stroke order (nearest neighbor)"""
-    if len(points) <= 1:
+def smooth_path_with_spline(points, smoothness=0, num_points=50):
+    """Smooth path using cubic spline interpolation"""
+    if len(points) < 4:
         return points
     
-    sorted_points = []
-    remaining = list(points)
+    points = np.array(points)
+    x = points[:, 0]
+    y = points[:, 1]
     
-    remaining.sort(key=lambda p: (p[1], p[0]))
-    sorted_points.append(remaining.pop(0))
-    
-    while remaining:
-        last = sorted_points[-1]
-        
-        nearest_idx = 0
-        nearest_dist = float('inf')
-        
-        for i, point in enumerate(remaining):
-            dist = (point[0] - last[0])**2 + (point[1] - last[1])**2
-            if dist < nearest_dist:
-                nearest_dist = dist
-                nearest_idx = i
-        
-        sorted_points.append(remaining.pop(nearest_idx))
-    
-    return sorted_points
+    try:
+        tck, u = splprep([x, y], s=smoothness, k=min(3, len(points)-1))
+        u_new = np.linspace(0, 1, num_points)
+        x_new, y_new = splev(u_new, tck)
+        return list(zip(x_new, y_new))
+    except:
+        return points
 
 
 def main():

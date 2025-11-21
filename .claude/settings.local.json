@@ -14,7 +14,8 @@
       "Bash(brew install:*)",
       "Bash(cat:*)",
       "Bash(md5:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
